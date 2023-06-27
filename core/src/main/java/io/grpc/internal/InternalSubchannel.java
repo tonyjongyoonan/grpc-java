@@ -83,23 +83,6 @@ final class InternalSubchannel implements InternalInstrumented<ChannelStats>, Tr
   private final SynchronizationContext syncContext;
 
   /**
-   * The index of the address corresponding to pendingTransport/activeTransport, or at beginning if
-   * both are null.
-   *
-   * <p>Note: any {@link Index#updateAddresses(List)} should also update {@link #addressGroups}.
-   */
-  private final Index addressIndex;
-
-  /**
-   * A volatile accessor to {@link Index#getAddressGroups()}. There are few methods ({@link
-   * #getAddressGroups()} and {@link #toString()} access this value where they supposed to access
-   * in the {@link #syncContext}. Ideally {@link Index#getAddressGroups()} can be volatile, so we
-   * don't need to maintain this volatile accessor. Although, having this accessor can reduce
-   * unnecessary volatile reads while it delivers clearer intention of why .
-   */
-  private volatile List<EquivalentAddressGroup> addressGroups;
-
-  /**
    * The policy to control back off between reconnects. Non-{@code null} when a reconnect task is
    * scheduled.
    */
@@ -110,8 +93,6 @@ final class InternalSubchannel implements InternalInstrumented<ChannelStats>, Tr
    */
   private final Stopwatch connectingTimer;
 
-  @Nullable
-  private ScheduledHandle reconnectTask;
   @Nullable
   private ScheduledHandle shutdownDueToUpdateTask;
   @Nullable
@@ -154,18 +135,14 @@ final class InternalSubchannel implements InternalInstrumented<ChannelStats>, Tr
 
   private Status shutdownReason;
 
-  InternalSubchannel(List<EquivalentAddressGroup> addressGroups, String authority, String userAgent,
+  InternalSubchannel(SocketAddress address, String authority, String userAgent,
       BackoffPolicy.Provider backoffPolicyProvider,
       ClientTransportFactory transportFactory, ScheduledExecutorService scheduledExecutor,
       Supplier<Stopwatch> stopwatchSupplier, SynchronizationContext syncContext, Callback callback,
       InternalChannelz channelz, CallTracer callsTracer, ChannelTracer channelTracer,
       InternalLogId logId, ChannelLogger channelLogger) {
-    Preconditions.checkNotNull(addressGroups, "addressGroups");
-    Preconditions.checkArgument(!addressGroups.isEmpty(), "addressGroups is empty");
-    checkListHasNoNulls(addressGroups, "addressGroups contains null entry");
-    List<EquivalentAddressGroup> unmodifiableAddressGroups =
-        Collections.unmodifiableList(new ArrayList<>(addressGroups));
-    this.addressGroups = unmodifiableAddressGroups;
+    Preconditions.checkNotNull(address, "address");
+    this.address = address;
     this.addressIndex = new Index(unmodifiableAddressGroups);
     this.authority = authority;
     this.userAgent = userAgent;
@@ -220,16 +197,14 @@ final class InternalSubchannel implements InternalInstrumented<ChannelStats>, Tr
     return authority;
   }
 
-  private void startNewTransport() {
+  private void startNewTransport(SocketAddress address) {
     syncContext.throwIfNotInThisSynchronizationContext();
 
     Preconditions.checkState(reconnectTask == null, "Should have no reconnectTask scheduled");
 
-    if (addressIndex.isAtBeginning()) {
-      connectingTimer.reset().start();
-    }
-    SocketAddress address = addressIndex.getCurrentAddress();
-
+    // if (addressIndex.isAtBeginning()) {
+    //   connectingTimer.reset().start();
+    // }
     HttpConnectProxiedSocketAddress proxiedAddr = null;
     if (address instanceof HttpConnectProxiedSocketAddress) {
       proxiedAddr = (HttpConnectProxiedSocketAddress) address;
@@ -263,61 +238,6 @@ final class InternalSubchannel implements InternalInstrumented<ChannelStats>, Tr
     channelLogger.log(ChannelLogLevel.INFO, "Started transport {0}", transportLogger.logId);
   }
 
-  /**
-   * Only called after all addresses attempted and failed (TRANSIENT_FAILURE).
-   * @param status the causal status when the channel begins transition to
-   *     TRANSIENT_FAILURE.
-   */
-  private void scheduleBackoff(final Status status) {
-    syncContext.throwIfNotInThisSynchronizationContext();
-
-    class EndOfCurrentBackoff implements Runnable {
-      @Override
-      public void run() {
-        reconnectTask = null;
-        channelLogger.log(ChannelLogLevel.INFO, "CONNECTING after backoff");
-        gotoNonErrorState(CONNECTING);
-        startNewTransport();
-      }
-    }
-
-    gotoState(ConnectivityStateInfo.forTransientFailure(status));
-    if (reconnectPolicy == null) {
-      reconnectPolicy = backoffPolicyProvider.get();
-    }
-    long delayNanos =
-        reconnectPolicy.nextBackoffNanos() - connectingTimer.elapsed(TimeUnit.NANOSECONDS);
-    channelLogger.log(
-        ChannelLogLevel.INFO,
-        "TRANSIENT_FAILURE ({0}). Will reconnect after {1} ns",
-        printShortStatus(status), delayNanos);
-    Preconditions.checkState(reconnectTask == null, "previous reconnectTask is not done");
-    reconnectTask = syncContext.schedule(
-        new EndOfCurrentBackoff(),
-        delayNanos,
-        TimeUnit.NANOSECONDS,
-        scheduledExecutor);
-  }
-
-  /**
-   * Immediately attempt to reconnect if the current state is TRANSIENT_FAILURE. Otherwise this
-   * method has no effect.
-   */
-  void resetConnectBackoff() {
-    syncContext.execute(new Runnable() {
-      @Override
-      public void run() {
-        if (state.getState() != TRANSIENT_FAILURE) {
-          return;
-        }
-        cancelReconnectTask();
-        channelLogger.log(ChannelLogLevel.INFO, "CONNECTING; backoff interrupted");
-        gotoNonErrorState(CONNECTING);
-        startNewTransport();
-      }
-    });
-  }
-
   private void gotoNonErrorState(final ConnectivityState newState) {
     syncContext.throwIfNotInThisSynchronizationContext();
 
@@ -333,72 +253,6 @@ final class InternalSubchannel implements InternalInstrumented<ChannelStats>, Tr
       state = newState;
       callback.onStateChange(InternalSubchannel.this, newState);
     }
-  }
-
-  /** Replaces the existing addresses, avoiding unnecessary reconnects. */
-  public void updateAddresses(final List<EquivalentAddressGroup> newAddressGroups) {
-    Preconditions.checkNotNull(newAddressGroups, "newAddressGroups");
-    checkListHasNoNulls(newAddressGroups, "newAddressGroups contains null entry");
-    Preconditions.checkArgument(!newAddressGroups.isEmpty(), "newAddressGroups is empty");
-    final List<EquivalentAddressGroup> newImmutableAddressGroups =
-        Collections.unmodifiableList(new ArrayList<>(newAddressGroups));
-
-    syncContext.execute(new Runnable() {
-      @Override
-      public void run() {
-        ManagedClientTransport savedTransport = null;
-        SocketAddress previousAddress = addressIndex.getCurrentAddress();
-        addressIndex.updateGroups(newImmutableAddressGroups);
-        addressGroups = newImmutableAddressGroups;
-        if (state.getState() == READY || state.getState() == CONNECTING) {
-          if (!addressIndex.seekTo(previousAddress)) {
-            // Forced to drop the connection
-            if (state.getState() == READY) {
-              savedTransport = activeTransport;
-              activeTransport = null;
-              addressIndex.reset();
-              gotoNonErrorState(IDLE);
-            } else {
-              pendingTransport.shutdown(
-                  Status.UNAVAILABLE.withDescription(
-                    "InternalSubchannel closed pending transport due to address change"));
-              pendingTransport = null;
-              addressIndex.reset();
-              startNewTransport();
-            }
-          }
-        }
-        if (savedTransport != null) {
-          if (shutdownDueToUpdateTask != null) {
-            // Keeping track of multiple shutdown tasks adds complexity, and shouldn't generally be
-            // necessary. This transport has probably already had plenty of time.
-            shutdownDueToUpdateTransport.shutdown(
-                Status.UNAVAILABLE.withDescription(
-                    "InternalSubchannel closed transport early due to address change"));
-            shutdownDueToUpdateTask.cancel();
-            shutdownDueToUpdateTask = null;
-            shutdownDueToUpdateTransport = null;
-          }
-          // Avoid needless RPC failures by delaying the shutdown. See
-          // https://github.com/grpc/grpc-java/issues/2562
-          shutdownDueToUpdateTransport = savedTransport;
-          shutdownDueToUpdateTask = syncContext.schedule(
-              new Runnable() {
-                @Override public void run() {
-                  ManagedClientTransport transport = shutdownDueToUpdateTransport;
-                  shutdownDueToUpdateTask = null;
-                  shutdownDueToUpdateTransport = null;
-                  transport.shutdown(
-                      Status.UNAVAILABLE.withDescription(
-                          "InternalSubchannel closed transport due to address change"));
-                }
-              },
-              ManagedChannelImpl.SUBCHANNEL_SHUTDOWN_DELAY_SECONDS,
-              TimeUnit.SECONDS,
-              scheduledExecutor);
-        }
-      }
-    });
   }
 
   public void shutdown(final Status reason) {
