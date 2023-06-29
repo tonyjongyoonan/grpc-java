@@ -22,12 +22,11 @@ import static io.grpc.ConnectivityState.IDLE;
 import static io.grpc.ConnectivityState.SHUTDOWN;
 import static io.grpc.ConnectivityState.TRANSIENT_FAILURE;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.MoreObjects;
-import io.grpc.ConnectivityState;
-import io.grpc.ConnectivityStateInfo;
-import io.grpc.EquivalentAddressGroup;
-import io.grpc.LoadBalancer;
-import io.grpc.Status;
+import io.grpc.*;
+
+import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -42,6 +41,17 @@ import javax.annotation.Nullable;
  */
 final class PickFirstLoadBalancer extends LoadBalancer {
   private final Helper helper;
+
+  /**
+   * A volatile accessor to {@link InternalSubchannel.Index#getAddressGroups()}. There are few methods ({@link
+   * #getAddressGroups()} and {@link #toString()} access this value where they supposed to access
+   * in the {@link #syncContext}. Ideally {@link InternalSubchannel.Index#getAddressGroups()} can be volatile, so we
+   * don't need to maintain this volatile accessor. Although, having this accessor can reduce
+   * unnecessary volatile reads while it delivers clearer intention of why .
+   */
+  private volatile List<EquivalentAddressGroup> addressGroups;
+  private volatile List<Subchannel> subchannels = new ArrayList<>(); // does this need to be thread-safe/volatile?
+  private int index;
   private Subchannel subchannel;
   private ConnectivityState currentState = IDLE;
 
@@ -54,8 +64,8 @@ final class PickFirstLoadBalancer extends LoadBalancer {
     List<EquivalentAddressGroup> servers = resolvedAddresses.getAddresses();
     if (servers.isEmpty()) {
       handleNameResolutionError(Status.UNAVAILABLE.withDescription(
-          "NameResolver returned no usable address. addrs=" + resolvedAddresses.getAddresses()
-              + ", attrs=" + resolvedAddresses.getAttributes()));
+              "NameResolver returned no usable address. addrs=" + resolvedAddresses.getAddresses()
+                      + ", attrs=" + resolvedAddresses.getAttributes()));
       return false;
     }
 
@@ -63,33 +73,40 @@ final class PickFirstLoadBalancer extends LoadBalancer {
     // the load.
     if (resolvedAddresses.getLoadBalancingPolicyConfig() instanceof PickFirstLoadBalancerConfig) {
       PickFirstLoadBalancerConfig config
-          = (PickFirstLoadBalancerConfig) resolvedAddresses.getLoadBalancingPolicyConfig();
+              = (PickFirstLoadBalancerConfig) resolvedAddresses.getLoadBalancingPolicyConfig();
       if (config.shuffleAddressList != null && config.shuffleAddressList) {
         servers = new ArrayList<EquivalentAddressGroup>(servers);
         Collections.shuffle(servers,
-            config.randomSeed != null ? new Random(config.randomSeed) : new Random());
+                config.randomSeed != null ? new Random(config.randomSeed) : new Random());
       }
     }
+    this.addressGroups = servers;
 
-    if (subchannel == null) {
-      final Subchannel subchannel = helper.createSubchannel(
-          CreateSubchannelArgs.newBuilder()
-              .setAddresses(servers)
-              .build());
-      subchannel.start(new SubchannelStateListener() {
-          @Override
-          public void onSubchannelState(ConnectivityStateInfo stateInfo) {
-            processSubchannelState(subchannel, stateInfo);
-          }
-        });
-      this.subchannel = subchannel;
-
+    if (subchannels == null) {
+      for (EquivalentAddressGroup server : servers) {
+        for (SocketAddress address : server.getAddresses()) {
+          final Subchannel subchannel = helper.createSubchannel(
+                  CreateSubchannelArgs.newBuilder()
+                          .setAddresses(servers) // send singular address in eag in list?
+                          .build());
+          subchannel.start(new SubchannelStateListener() {
+            @Override
+            public void onSubchannelState(ConnectivityStateInfo stateInfo) {
+              processSubchannelState(subchannel, stateInfo);
+            }
+          });
+          subchannels.add(subchannel);
+        }
+      }
       // The channel state does not get updated when doing name resolving today, so for the moment
       // let LB report CONNECTION and call subchannel.requestConnection() immediately.
-      updateBalancingState(CONNECTING, new Picker(PickResult.withSubchannel(subchannel)));
-      subchannel.requestConnection();
+      updateBalancingState(CONNECTING, new Picker(PickResult.withSubchannel(subchannels.get(0))));
+      subchannels.get(0).requestConnection();
+//      updateBalancingState(CONNECTING, new Picker(PickResult.withSubchannel(subchannel)));
+//      subchannel.requestConnection();
     } else {
-      subchannel.updateAddresses(servers);
+      updateAddresses(servers);
+//      subchannel.updateAddresses(servers);
     }
 
     return true;
@@ -98,6 +115,8 @@ final class PickFirstLoadBalancer extends LoadBalancer {
   @Override
   public void handleNameResolutionError(Status error) {
     if (subchannel != null) {
+      addressIndex.reset(); // index? addressindex?
+      index = 0;
       subchannel.shutdown();
       subchannel = null;
     }
@@ -124,7 +143,7 @@ final class PickFirstLoadBalancer extends LoadBalancer {
       if (newState == CONNECTING) {
         return;
       } else if (newState == IDLE) {
-        requestConnection();
+        requestConnection(); // TODO: desired behavior here?? next or current
         return;
       }
     }
@@ -132,6 +151,7 @@ final class PickFirstLoadBalancer extends LoadBalancer {
     SubchannelPicker picker;
     switch (newState) {
       case IDLE:
+        index++; // TODO: requestconnectionpicker should be modified to use index
         picker = new RequestConnectionPicker(subchannel);
         break;
       case CONNECTING:
@@ -193,7 +213,9 @@ final class PickFirstLoadBalancer extends LoadBalancer {
     }
   }
 
-  /** Picker that requests connection during the first pick, and returns noResult. */
+  /**
+   * Picker that requests connection during the first pick, and returns noResult.
+   */
   private final class RequestConnectionPicker extends SubchannelPicker {
     private final Subchannel subchannel;
     private final AtomicBoolean connectionRequested = new AtomicBoolean(false);
@@ -206,13 +228,87 @@ final class PickFirstLoadBalancer extends LoadBalancer {
     public PickResult pickSubchannel(PickSubchannelArgs args) {
       if (connectionRequested.compareAndSet(false, true)) {
         helper.getSynchronizationContext().execute(new Runnable() {
-            @Override
-            public void run() {
-              subchannel.requestConnection();
-            }
-          });
+          @Override
+          public void run() {
+            subchannel.requestConnection();
+          }
+        });
       }
       return PickResult.withNoResult();
+    }
+  }
+
+  /**
+   * Index as in 'i', the pointer to an entry. Not a "search index."
+   */
+  @VisibleForTesting
+  static final class Index {
+    private List<EquivalentAddressGroup> addressGroups;
+    private int groupIndex;
+    private int addressIndex;
+
+    public Index(List<EquivalentAddressGroup> groups) {
+      this.addressGroups = groups;
+    }
+
+    public boolean isValid() {
+      // addressIndex will never be invalid
+      return groupIndex < addressGroups.size();
+    }
+
+    public boolean isAtBeginning() {
+      return groupIndex == 0 && addressIndex == 0;
+    }
+
+    public void increment() {
+      EquivalentAddressGroup group = addressGroups.get(groupIndex);
+      addressIndex++;
+      if (addressIndex >= group.getAddresses().size()) {
+        groupIndex++;
+        addressIndex = 0;
+      }
+    }
+
+    public void reset() {
+      groupIndex = 0;
+      addressIndex = 0;
+    }
+
+    public SocketAddress getCurrentAddress() {
+      return addressGroups.get(groupIndex).getAddresses().get(addressIndex);
+    }
+
+    public Attributes getCurrentEagAttributes() {
+      return addressGroups.get(groupIndex).getAttributes();
+    }
+
+    public List<EquivalentAddressGroup> getGroups() {
+      return addressGroups;
+    }
+
+    /**
+     * Update to new groups, resetting the current index.
+     */
+    public void updateGroups(List<EquivalentAddressGroup> newGroups) {
+      addressGroups = newGroups;
+      reset();
+    }
+
+    /**
+     * Returns false if the needle was not found and the current index was left unchanged.
+     */
+    public boolean seekTo(SocketAddress needle) {
+      for (int i = 0; i < addressGroups.size(); i++) {
+        EquivalentAddressGroup group = addressGroups.get(i);
+        int j = group.getAddresses().indexOf(needle);
+        if (j == -1) {
+          continue;
+        }
+        this.groupIndex = i;
+        this.addressIndex = j;
+        return true;
+      }
+      return false;
     }
   }
 
@@ -222,12 +318,12 @@ final class PickFirstLoadBalancer extends LoadBalancer {
     public final Boolean shuffleAddressList;
 
     // For testing purposes only, not meant to be parsed from a real config.
-    @Nullable final Long randomSeed;
+    @Nullable
+    final Long randomSeed;
 
     public PickFirstLoadBalancerConfig(@Nullable Boolean shuffleAddressList) {
-      this(shuffleAddressList, null);
+        this(shuffleAddressList, null);
     }
-
     PickFirstLoadBalancerConfig(@Nullable Boolean shuffleAddressList, @Nullable Long randomSeed) {
       this.shuffleAddressList = shuffleAddressList;
       this.randomSeed = randomSeed;
