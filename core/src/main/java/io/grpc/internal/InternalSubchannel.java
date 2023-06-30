@@ -88,7 +88,7 @@ final class InternalSubchannel implements InternalInstrumented<ChannelStats>, Tr
    *
    * <p>Note: any {@link Index#updateAddresses(List)} should also update {@link #addressGroups}.
    */
-  private final Index addressIndex;
+//  private final Index addressIndex;
 
   /**
    * A volatile accessor to {@link Index#getAddressGroups()}. There are few methods ({@link
@@ -365,7 +365,7 @@ final class InternalSubchannel implements InternalInstrumented<ChannelStats>, Tr
 //                  Status.UNAVAILABLE.withDescription(
 //                    "InternalSubchannel closed pending transport due to address change"));
 //              pendingTransport = null;
-//              addressIndex.reset();
+////              addressIndex.reset();
 //              startNewTransport();
 //            }
 //          }
@@ -401,7 +401,7 @@ final class InternalSubchannel implements InternalInstrumented<ChannelStats>, Tr
 //        }
 //      }
 //    });
-//  }
+  }
 
   public void shutdown(final Status reason) {
     syncContext.execute(new Runnable() {
@@ -510,7 +510,7 @@ final class InternalSubchannel implements InternalInstrumented<ChannelStats>, Tr
       @Override
       public void run() {
         ChannelStats.Builder builder = new ChannelStats.Builder();
-        List<EquivalentAddressGroup> addressGroupsSnapshot = addressIndex.getGroups();
+        List<EquivalentAddressGroup> addressGroupsSnapshot = addressGroups;
         List<InternalWithLogId> transportsSnapshot = new ArrayList<InternalWithLogId>(transports);
         builder.setTarget(addressGroupsSnapshot.toString()).setState(getState());
         builder.setSockets(transportsSnapshot);

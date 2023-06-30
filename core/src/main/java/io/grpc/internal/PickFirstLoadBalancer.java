@@ -27,6 +27,7 @@ import com.google.common.base.MoreObjects;
 import io.grpc.*;
 
 import java.net.SocketAddress;
+import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -42,13 +43,7 @@ import javax.annotation.Nullable;
 final class PickFirstLoadBalancer extends LoadBalancer {
   private final Helper helper;
 
-  /**
-   * A volatile accessor to {@link InternalSubchannel.Index#getAddressGroups()}. There are few methods ({@link
-   * #getAddressGroups()} and {@link #toString()} access this value where they supposed to access
-   * in the {@link #syncContext}. Ideally {@link InternalSubchannel.Index#getAddressGroups()} can be volatile, so we
-   * don't need to maintain this volatile accessor. Although, having this accessor can reduce
-   * unnecessary volatile reads while it delivers clearer intention of why .
-   */
+
   private volatile List<EquivalentAddressGroup> addressGroups;
   private volatile List<Subchannel> subchannels = new ArrayList<>(); // does this need to be thread-safe/volatile?
   private int index;
@@ -83,39 +78,36 @@ final class PickFirstLoadBalancer extends LoadBalancer {
     this.addressGroups = servers;
 
     if (subchannels == null) {
-      for (EquivalentAddressGroup server : servers) {
+      index = 0;
+      for (EquivalentAddressGroup server : addressGroups) {
         for (SocketAddress address : server.getAddresses()) {
+          List<EquivalentAddressGroup> addrs = new ArrayList<>();
+          addrs.add(new EquivalentAddressGroup(address));
           final Subchannel subchannel = helper.createSubchannel(
                   CreateSubchannelArgs.newBuilder()
-                          .setAddresses(servers) // send singular address in eag in list?
+                          .setAddresses(addrs) // TODO: send singular address in eag in list?
                           .build());
-          subchannel.start(new SubchannelStateListener() {
-            @Override
-            public void onSubchannelState(ConnectivityStateInfo stateInfo) {
-              processSubchannelState(subchannel, stateInfo);
-            }
-          });
           subchannels.add(subchannel);
         }
       }
       // The channel state does not get updated when doing name resolving today, so for the moment
       // let LB report CONNECTION and call subchannel.requestConnection() immediately.
-      updateBalancingState(CONNECTING, new Picker(PickResult.withSubchannel(subchannels.get(0))));
-      subchannels.get(0).requestConnection();
-//      updateBalancingState(CONNECTING, new Picker(PickResult.withSubchannel(subchannel)));
-//      subchannel.requestConnection();
+      updateBalancingState(CONNECTING,
+              new Picker(PickResult.withSubchannel(subchannels.get(index))));
+      requestConnection();
     } else {
       updateAddresses(servers);
-//      subchannel.updateAddresses(servers);
     }
 
     return true;
   }
 
-  @Override
+  public void updateAddresses(final List<EquivalentAddressGroup> newAddressGroups) {
+  }
+    @Override
   public void handleNameResolutionError(Status error) {
     if (subchannel != null) {
-      addressIndex.reset(); // index? addressindex?
+//      addressIndex.reset(); // index? addressindex?
       index = 0;
       subchannel.shutdown();
       subchannel = null;
@@ -186,8 +178,14 @@ final class PickFirstLoadBalancer extends LoadBalancer {
 
   @Override
   public void requestConnection() {
-    if (subchannel != null) {
-      subchannel.requestConnection();
+    if (subchannels.get(index) != null) {
+      subchannels.get(index).start(new SubchannelStateListener() {
+        @Override
+        public void onSubchannelState(ConnectivityStateInfo stateInfo) {
+          processSubchannelState(subchannels.get(index), stateInfo);
+        }
+      });
+      subchannels.get(index).requestConnection();
     }
   }
 

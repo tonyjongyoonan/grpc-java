@@ -2092,7 +2092,7 @@ final class ManagedChannelImpl extends ManagedChannel implements
       if (authorityOverride != null) {
         addrs = stripOverrideAuthorityAttributes(addrs);
       }
-      subchannel.updateAddresses(addrs);
+//      subchannel.updateAddresses(addrs);
     }
 
     private List<EquivalentAddressGroup> stripOverrideAuthorityAttributes(
