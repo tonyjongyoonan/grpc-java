@@ -52,7 +52,6 @@ final class PickFirstLoadBalancer extends LoadBalancer {
   private volatile List<EquivalentAddressGroup> addressGroups;
   private volatile List<Subchannel> subchannels = new ArrayList<>(); // does this need to be thread-safe/volatile?
   private int index;
-  private Subchannel subchannel;
   private ConnectivityState currentState = IDLE;
 
   PickFirstLoadBalancer(Helper helper) {
@@ -86,11 +85,11 @@ final class PickFirstLoadBalancer extends LoadBalancer {
       index = 0;
       for (EquivalentAddressGroup server : addressGroups) {
         for (SocketAddress address : server.getAddresses()) {
-          List<EquivalentAddressGroup> addrs = new ArrayList<>();
-          addrs.add(new EquivalentAddressGroup(address));
+          List<EquivalentAddressGroup> addresses = new ArrayList<>();
+          addresses.add(new EquivalentAddressGroup(address));
           final Subchannel subchannel = helper.createSubchannel(
                   CreateSubchannelArgs.newBuilder()
-                          .setAddresses(addrs) // TODO: confirm send single address in eag in list?
+                          .setAddresses(addresses) // TODO: confirm send single address in eag in list?
                           .build());
           subchannels.add(subchannel);
         }
@@ -111,11 +110,12 @@ final class PickFirstLoadBalancer extends LoadBalancer {
   }
     @Override
   public void handleNameResolutionError(Status error) {
-    if (subchannel != null) {
-//      addressIndex.reset(); // index? addressindex?
+    if (subchannels != null) {
+      for (Subchannel subchannel : subchannels) {
+        subchannel.shutdown();
+        subchannel = null;
+      }
       index = 0;
-      subchannel.shutdown();
-      subchannel = null;
     }
     // NB(lukaszx0) Whether we should propagate the error unconditionally is arguable. It's fine
     // for time being.
@@ -153,14 +153,17 @@ final class PickFirstLoadBalancer extends LoadBalancer {
         picker = new RequestConnectionPicker(subchannel);
         break;
       case CONNECTING:
+        index++;
         // It's safe to use RequestConnectionPicker here, so when coming from IDLE we could leave
         // the current picker in-place. But ignoring the potential optimization is simpler.
         picker = new Picker(PickResult.withNoResult());
         break;
       case READY:
+        index++;
         picker = new Picker(PickResult.withSubchannel(subchannel));
         break;
       case TRANSIENT_FAILURE:
+        index++;
         picker = new Picker(PickResult.withError(stateInfo.getStatus()));
         break;
       default:
@@ -177,8 +180,10 @@ final class PickFirstLoadBalancer extends LoadBalancer {
 
   @Override
   public void shutdown() {
-    if (subchannel != null) {
-      subchannel.shutdown();
+    if (subchannels != null) {
+      for (Subchannel subchannel : subchannels) {
+        subchannel.shutdown();
+      }
     }
   }
 
