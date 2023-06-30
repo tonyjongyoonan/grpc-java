@@ -24,7 +24,12 @@ import static io.grpc.ConnectivityState.TRANSIENT_FAILURE;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.MoreObjects;
-import io.grpc.*;
+import io.grpc.Attributes;
+import io.grpc.ConnectivityState;
+import io.grpc.ConnectivityStateInfo;
+import io.grpc.EquivalentAddressGroup;
+import io.grpc.LoadBalancer;
+import io.grpc.Status;
 
 import java.net.SocketAddress;
 import java.util.Arrays;
@@ -85,7 +90,7 @@ final class PickFirstLoadBalancer extends LoadBalancer {
           addrs.add(new EquivalentAddressGroup(address));
           final Subchannel subchannel = helper.createSubchannel(
                   CreateSubchannelArgs.newBuilder()
-                          .setAddresses(addrs) // TODO: send singular address in eag in list?
+                          .setAddresses(addrs) // TODO: confirm send single address in eag in list?
                           .build());
           subchannels.add(subchannel);
         }
@@ -135,6 +140,7 @@ final class PickFirstLoadBalancer extends LoadBalancer {
       if (newState == CONNECTING) {
         return;
       } else if (newState == IDLE) {
+        index++;
         requestConnection(); // TODO: desired behavior here?? next or current
         return;
       }
