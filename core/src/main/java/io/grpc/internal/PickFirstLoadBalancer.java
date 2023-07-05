@@ -22,17 +22,12 @@ import static io.grpc.ConnectivityState.IDLE;
 import static io.grpc.ConnectivityState.SHUTDOWN;
 import static io.grpc.ConnectivityState.TRANSIENT_FAILURE;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.MoreObjects;
-import io.grpc.Attributes;
 import io.grpc.ConnectivityState;
 import io.grpc.ConnectivityStateInfo;
 import io.grpc.EquivalentAddressGroup;
 import io.grpc.LoadBalancer;
 import io.grpc.Status;
-
-import java.net.SocketAddress;
-import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -47,11 +42,7 @@ import javax.annotation.Nullable;
  */
 final class PickFirstLoadBalancer extends LoadBalancer {
   private final Helper helper;
-
-
-  private volatile List<EquivalentAddressGroup> addressGroups;
-  private volatile List<Subchannel> subchannels = new ArrayList<>(); // does this need to be thread-safe/volatile?
-  private int index;
+  private Subchannel subchannel;
   private ConnectivityState currentState = IDLE;
 
   PickFirstLoadBalancer(Helper helper) {
@@ -79,41 +70,36 @@ final class PickFirstLoadBalancer extends LoadBalancer {
                 config.randomSeed != null ? new Random(config.randomSeed) : new Random());
       }
     }
-    this.addressGroups = servers;
 
-    if (subchannels.size() == 0) {
-      index = 0;
-      for (EquivalentAddressGroup server : addressGroups) {
-        for (SocketAddress address : server.getAddresses()) {
-          List<EquivalentAddressGroup> addresses = new ArrayList<>();
-          addresses.add(new EquivalentAddressGroup(address));
-          final Subchannel subchannel = helper.createSubchannel(
-                  CreateSubchannelArgs.newBuilder()
-                          .setAddresses(addresses) // TODO: confirm send single address in eag in list?
-                          .build());
-          subchannels.add(subchannel);
+    if (subchannel == null) {
+      final Subchannel subchannel = helper.createSubchannel(
+              CreateSubchannelArgs.newBuilder()
+                      .setAddresses(servers)
+                      .build());
+      subchannel.start(new SubchannelStateListener() {
+        @Override
+        public void onSubchannelState(ConnectivityStateInfo stateInfo) {
+          processSubchannelState(subchannel, stateInfo);
         }
-      }
+      });
+      this.subchannel = subchannel;
+
       // The channel state does not get updated when doing name resolving today, so for the moment
       // let LB report CONNECTION and call subchannel.requestConnection() immediately.
-      requestConnection();
+      updateBalancingState(CONNECTING, new Picker(PickResult.withSubchannel(subchannel)));
+      subchannel.requestConnection();
     } else {
-      updateAddresses(servers);
+      subchannel.updateAddresses(servers);
     }
 
     return true;
   }
 
-  public void updateAddresses(final List<EquivalentAddressGroup> newAddressGroups) {
-  }
-    @Override
+  @Override
   public void handleNameResolutionError(Status error) {
-    if (subchannels != null) {
-      for (Subchannel subchannel : subchannels) {
-        subchannel.shutdown();
-        subchannel = null;
-      }
-      index = 0;
+    if (subchannel != null) {
+      subchannel.shutdown();
+      subchannel = null;
     }
     // NB(lukaszx0) Whether we should propagate the error unconditionally is arguable. It's fine
     // for time being.
@@ -138,8 +124,7 @@ final class PickFirstLoadBalancer extends LoadBalancer {
       if (newState == CONNECTING) {
         return;
       } else if (newState == IDLE) {
-        index++;
-        requestConnection(); // TODO: desired behavior here?? next or current
+        requestConnection();
         return;
       }
     }
@@ -147,7 +132,6 @@ final class PickFirstLoadBalancer extends LoadBalancer {
     SubchannelPicker picker;
     switch (newState) {
       case IDLE:
-        index++;
         picker = new RequestConnectionPicker(subchannel);
         break;
       case CONNECTING:
@@ -175,25 +159,15 @@ final class PickFirstLoadBalancer extends LoadBalancer {
 
   @Override
   public void shutdown() {
-    if (subchannels != null) {
-      for (Subchannel subchannel : subchannels) {
-        subchannel.shutdown();
-      }
+    if (subchannel != null) {
+      subchannel.shutdown();
     }
   }
 
   @Override
   public void requestConnection() {
-    if (index < subchannels.size() && subchannels.get(index) != null) {
-      updateBalancingState(CONNECTING,
-              new Picker(PickResult.withSubchannel(subchannels.get(index))));
-      subchannels.get(index).start(new SubchannelStateListener() {
-        @Override
-        public void onSubchannelState(ConnectivityStateInfo stateInfo) {
-          processSubchannelState(subchannels.get(index), stateInfo);
-        }
-      });
-      subchannels.get(index).requestConnection();
+    if (subchannel != null) {
+      subchannel.requestConnection();
     }
   }
 
@@ -219,9 +193,7 @@ final class PickFirstLoadBalancer extends LoadBalancer {
     }
   }
 
-  /**
-   * Picker that requests connection during the first pick, and returns noResult.
-   */
+  /** Picker that requests connection during the first pick, and returns noResult. */
   private final class RequestConnectionPicker extends SubchannelPicker {
     private final Subchannel subchannel;
     private final AtomicBoolean connectionRequested = new AtomicBoolean(false);
@@ -244,92 +216,18 @@ final class PickFirstLoadBalancer extends LoadBalancer {
     }
   }
 
-  /**
-   * Index as in 'i', the pointer to an entry. Not a "search index."
-   */
-  @VisibleForTesting
-  static final class Index {
-    private List<EquivalentAddressGroup> addressGroups;
-    private int groupIndex;
-    private int addressIndex;
-
-    public Index(List<EquivalentAddressGroup> groups) {
-      this.addressGroups = groups;
-    }
-
-    public boolean isValid() {
-      // addressIndex will never be invalid
-      return groupIndex < addressGroups.size();
-    }
-
-    public boolean isAtBeginning() {
-      return groupIndex == 0 && addressIndex == 0;
-    }
-
-    public void increment() {
-      EquivalentAddressGroup group = addressGroups.get(groupIndex);
-      addressIndex++;
-      if (addressIndex >= group.getAddresses().size()) {
-        groupIndex++;
-        addressIndex = 0;
-      }
-    }
-
-    public void reset() {
-      groupIndex = 0;
-      addressIndex = 0;
-    }
-
-    public SocketAddress getCurrentAddress() {
-      return addressGroups.get(groupIndex).getAddresses().get(addressIndex);
-    }
-
-    public Attributes getCurrentEagAttributes() {
-      return addressGroups.get(groupIndex).getAttributes();
-    }
-
-    public List<EquivalentAddressGroup> getGroups() {
-      return addressGroups;
-    }
-
-    /**
-     * Update to new groups, resetting the current index.
-     */
-    public void updateGroups(List<EquivalentAddressGroup> newGroups) {
-      addressGroups = newGroups;
-      reset();
-    }
-
-    /**
-     * Returns false if the needle was not found and the current index was left unchanged.
-     */
-    public boolean seekTo(SocketAddress needle) {
-      for (int i = 0; i < addressGroups.size(); i++) {
-        EquivalentAddressGroup group = addressGroups.get(i);
-        int j = group.getAddresses().indexOf(needle);
-        if (j == -1) {
-          continue;
-        }
-        this.groupIndex = i;
-        this.addressIndex = j;
-        return true;
-      }
-      return false;
-    }
-  }
-
   public static final class PickFirstLoadBalancerConfig {
 
     @Nullable
     public final Boolean shuffleAddressList;
 
     // For testing purposes only, not meant to be parsed from a real config.
-    @Nullable
-    final Long randomSeed;
+    @Nullable final Long randomSeed;
 
     public PickFirstLoadBalancerConfig(@Nullable Boolean shuffleAddressList) {
-        this(shuffleAddressList, null);
+      this(shuffleAddressList, null);
     }
+
     PickFirstLoadBalancerConfig(@Nullable Boolean shuffleAddressList, @Nullable Long randomSeed) {
       this.shuffleAddressList = shuffleAddressList;
       this.randomSeed = randomSeed;
