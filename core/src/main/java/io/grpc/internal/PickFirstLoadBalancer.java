@@ -81,7 +81,7 @@ final class PickFirstLoadBalancer extends LoadBalancer {
     }
     this.addressGroups = servers;
 
-    if (subchannels == null) {
+    if (subchannels.size() == 0) {
       index = 0;
       for (EquivalentAddressGroup server : addressGroups) {
         for (SocketAddress address : server.getAddresses()) {
@@ -96,8 +96,6 @@ final class PickFirstLoadBalancer extends LoadBalancer {
       }
       // The channel state does not get updated when doing name resolving today, so for the moment
       // let LB report CONNECTION and call subchannel.requestConnection() immediately.
-      updateBalancingState(CONNECTING,
-              new Picker(PickResult.withSubchannel(subchannels.get(index))));
       requestConnection();
     } else {
       updateAddresses(servers);
@@ -186,7 +184,9 @@ final class PickFirstLoadBalancer extends LoadBalancer {
 
   @Override
   public void requestConnection() {
-    if (subchannels.get(index) != null) {
+    if (index < subchannels.size() && subchannels.get(index) != null) {
+      updateBalancingState(CONNECTING,
+              new Picker(PickResult.withSubchannel(subchannels.get(index))));
       subchannels.get(index).start(new SubchannelStateListener() {
         @Override
         public void onSubchannelState(ConnectivityStateInfo stateInfo) {
