@@ -149,21 +149,18 @@ final class PickFirstLoadBalancer extends LoadBalancer {
     SubchannelPicker picker;
     switch (newState) {
       case IDLE:
-        index++; // TODO: requestconnectionpicker should be modified to use index
+        index++;
         picker = new RequestConnectionPicker(subchannel);
         break;
       case CONNECTING:
-        index++;
         // It's safe to use RequestConnectionPicker here, so when coming from IDLE we could leave
         // the current picker in-place. But ignoring the potential optimization is simpler.
         picker = new Picker(PickResult.withNoResult());
         break;
       case READY:
-        index++;
         picker = new Picker(PickResult.withSubchannel(subchannel));
         break;
       case TRANSIENT_FAILURE:
-        index++;
         picker = new Picker(PickResult.withError(stateInfo.getStatus()));
         break;
       default:

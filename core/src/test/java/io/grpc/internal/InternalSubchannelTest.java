@@ -1239,104 +1239,104 @@ public class InternalSubchannelTest {
     assertEquals(actualTransport.transport.getLogId(), registeredTransport.getLogId());
   }
 
-//  @Test public void index_looping() {
-//    Attributes.Key<String> key = Attributes.Key.create("some-key");
-//    Attributes attr1 = Attributes.newBuilder().set(key, "1").build();
-//    Attributes attr2 = Attributes.newBuilder().set(key, "2").build();
-//    Attributes attr3 = Attributes.newBuilder().set(key, "3").build();
-//    SocketAddress addr1 = new FakeSocketAddress();
-//    SocketAddress addr2 = new FakeSocketAddress();
-//    SocketAddress addr3 = new FakeSocketAddress();
-//    SocketAddress addr4 = new FakeSocketAddress();
-//    SocketAddress addr5 = new FakeSocketAddress();
-//    Index index = new Index(Arrays.asList(
-//        new EquivalentAddressGroup(Arrays.asList(addr1, addr2), attr1),
-//        new EquivalentAddressGroup(Arrays.asList(addr3), attr2),
-//        new EquivalentAddressGroup(Arrays.asList(addr4, addr5), attr3)));
-//    assertThat(index.getCurrentAddress()).isSameInstanceAs(addr1);
-//    assertThat(index.getCurrentEagAttributes()).isSameInstanceAs(attr1);
-//    assertThat(index.isAtBeginning()).isTrue();
-//    assertThat(index.isValid()).isTrue();
-//
-//    index.increment();
-//    assertThat(index.getCurrentAddress()).isSameInstanceAs(addr2);
-//    assertThat(index.getCurrentEagAttributes()).isSameInstanceAs(attr1);
-//    assertThat(index.isAtBeginning()).isFalse();
-//    assertThat(index.isValid()).isTrue();
-//
-//    index.increment();
-//    assertThat(index.getCurrentAddress()).isSameInstanceAs(addr3);
-//    assertThat(index.getCurrentEagAttributes()).isSameInstanceAs(attr2);
-//    assertThat(index.isAtBeginning()).isFalse();
-//    assertThat(index.isValid()).isTrue();
-//
-//    index.increment();
-//    assertThat(index.getCurrentAddress()).isSameInstanceAs(addr4);
-//    assertThat(index.getCurrentEagAttributes()).isSameInstanceAs(attr3);
-//    assertThat(index.isAtBeginning()).isFalse();
-//    assertThat(index.isValid()).isTrue();
-//
-//    index.increment();
-//    assertThat(index.getCurrentAddress()).isSameInstanceAs(addr5);
-//    assertThat(index.getCurrentEagAttributes()).isSameInstanceAs(attr3);
-//    assertThat(index.isAtBeginning()).isFalse();
-//    assertThat(index.isValid()).isTrue();
-//
-//    index.increment();
-//    assertThat(index.isAtBeginning()).isFalse();
-//    assertThat(index.isValid()).isFalse();
-//
-//    index.reset();
-//    assertThat(index.getCurrentAddress()).isSameInstanceAs(addr1);
-//    assertThat(index.getCurrentEagAttributes()).isSameInstanceAs(attr1);
-//    assertThat(index.isAtBeginning()).isTrue();
-//    assertThat(index.isValid()).isTrue();
-//
-//    // We want to make sure both groupIndex and addressIndex are reset
-//    index.increment();
-//    index.increment();
-//    index.increment();
-//    index.increment();
-//    assertThat(index.getCurrentAddress()).isSameInstanceAs(addr5);
-//    assertThat(index.getCurrentEagAttributes()).isSameInstanceAs(attr3);
-//    index.reset();
-//    assertThat(index.getCurrentAddress()).isSameInstanceAs(addr1);
-//    assertThat(index.getCurrentEagAttributes()).isSameInstanceAs(attr1);
-//  }
-//
-//  @Test public void index_updateGroups_resets() {
-//    SocketAddress addr1 = new FakeSocketAddress();
-//    SocketAddress addr2 = new FakeSocketAddress();
-//    SocketAddress addr3 = new FakeSocketAddress();
-//    Index index = new Index(Arrays.asList(
-//        new EquivalentAddressGroup(Arrays.asList(addr1)),
-//        new EquivalentAddressGroup(Arrays.asList(addr2, addr3))));
-//    index.increment();
-//    index.increment();
-//    // We want to make sure both groupIndex and addressIndex are reset
-//    index.updateGroups(Arrays.asList(
-//        new EquivalentAddressGroup(Arrays.asList(addr1)),
-//        new EquivalentAddressGroup(Arrays.asList(addr2, addr3))));
-//    assertThat(index.getCurrentAddress()).isSameInstanceAs(addr1);
-//  }
-//
-//  @Test public void index_seekTo() {
-//    SocketAddress addr1 = new FakeSocketAddress();
-//    SocketAddress addr2 = new FakeSocketAddress();
-//    SocketAddress addr3 = new FakeSocketAddress();
-//    Index index = new Index(Arrays.asList(
-//        new EquivalentAddressGroup(Arrays.asList(addr1, addr2)),
-//        new EquivalentAddressGroup(Arrays.asList(addr3))));
-//    assertThat(index.seekTo(addr3)).isTrue();
-//    assertThat(index.getCurrentAddress()).isSameInstanceAs(addr3);
-//    assertThat(index.seekTo(addr1)).isTrue();
-//    assertThat(index.getCurrentAddress()).isSameInstanceAs(addr1);
-//    assertThat(index.seekTo(addr2)).isTrue();
-//    assertThat(index.getCurrentAddress()).isSameInstanceAs(addr2);
-//    index.seekTo(new FakeSocketAddress());
-//    // Failed seekTo doesn't change the index
-//    assertThat(index.getCurrentAddress()).isSameInstanceAs(addr2);
-//  }
+  @Test public void index_looping() {
+    Attributes.Key<String> key = Attributes.Key.create("some-key");
+    Attributes attr1 = Attributes.newBuilder().set(key, "1").build();
+    Attributes attr2 = Attributes.newBuilder().set(key, "2").build();
+    Attributes attr3 = Attributes.newBuilder().set(key, "3").build();
+    SocketAddress addr1 = new FakeSocketAddress();
+    SocketAddress addr2 = new FakeSocketAddress();
+    SocketAddress addr3 = new FakeSocketAddress();
+    SocketAddress addr4 = new FakeSocketAddress();
+    SocketAddress addr5 = new FakeSocketAddress();
+    Index index = new Index(Arrays.asList(
+        new EquivalentAddressGroup(Arrays.asList(addr1, addr2), attr1),
+        new EquivalentAddressGroup(Arrays.asList(addr3), attr2),
+        new EquivalentAddressGroup(Arrays.asList(addr4, addr5), attr3)));
+    assertThat(index.getCurrentAddress()).isSameInstanceAs(addr1);
+    assertThat(index.getCurrentEagAttributes()).isSameInstanceAs(attr1);
+    assertThat(index.isAtBeginning()).isTrue();
+    assertThat(index.isValid()).isTrue();
+
+    index.increment();
+    assertThat(index.getCurrentAddress()).isSameInstanceAs(addr2);
+    assertThat(index.getCurrentEagAttributes()).isSameInstanceAs(attr1);
+    assertThat(index.isAtBeginning()).isFalse();
+    assertThat(index.isValid()).isTrue();
+
+    index.increment();
+    assertThat(index.getCurrentAddress()).isSameInstanceAs(addr3);
+    assertThat(index.getCurrentEagAttributes()).isSameInstanceAs(attr2);
+    assertThat(index.isAtBeginning()).isFalse();
+    assertThat(index.isValid()).isTrue();
+
+    index.increment();
+    assertThat(index.getCurrentAddress()).isSameInstanceAs(addr4);
+    assertThat(index.getCurrentEagAttributes()).isSameInstanceAs(attr3);
+    assertThat(index.isAtBeginning()).isFalse();
+    assertThat(index.isValid()).isTrue();
+
+    index.increment();
+    assertThat(index.getCurrentAddress()).isSameInstanceAs(addr5);
+    assertThat(index.getCurrentEagAttributes()).isSameInstanceAs(attr3);
+    assertThat(index.isAtBeginning()).isFalse();
+    assertThat(index.isValid()).isTrue();
+
+    index.increment();
+    assertThat(index.isAtBeginning()).isFalse();
+    assertThat(index.isValid()).isFalse();
+
+    index.reset();
+    assertThat(index.getCurrentAddress()).isSameInstanceAs(addr1);
+    assertThat(index.getCurrentEagAttributes()).isSameInstanceAs(attr1);
+    assertThat(index.isAtBeginning()).isTrue();
+    assertThat(index.isValid()).isTrue();
+
+    // We want to make sure both groupIndex and addressIndex are reset
+    index.increment();
+    index.increment();
+    index.increment();
+    index.increment();
+    assertThat(index.getCurrentAddress()).isSameInstanceAs(addr5);
+    assertThat(index.getCurrentEagAttributes()).isSameInstanceAs(attr3);
+    index.reset();
+    assertThat(index.getCurrentAddress()).isSameInstanceAs(addr1);
+    assertThat(index.getCurrentEagAttributes()).isSameInstanceAs(attr1);
+  }
+
+  @Test public void index_updateGroups_resets() {
+    SocketAddress addr1 = new FakeSocketAddress();
+    SocketAddress addr2 = new FakeSocketAddress();
+    SocketAddress addr3 = new FakeSocketAddress();
+    Index index = new Index(Arrays.asList(
+        new EquivalentAddressGroup(Arrays.asList(addr1)),
+        new EquivalentAddressGroup(Arrays.asList(addr2, addr3))));
+    index.increment();
+    index.increment();
+    // We want to make sure both groupIndex and addressIndex are reset
+    index.updateGroups(Arrays.asList(
+        new EquivalentAddressGroup(Arrays.asList(addr1)),
+        new EquivalentAddressGroup(Arrays.asList(addr2, addr3))));
+    assertThat(index.getCurrentAddress()).isSameInstanceAs(addr1);
+  }
+
+  @Test public void index_seekTo() {
+    SocketAddress addr1 = new FakeSocketAddress();
+    SocketAddress addr2 = new FakeSocketAddress();
+    SocketAddress addr3 = new FakeSocketAddress();
+    Index index = new Index(Arrays.asList(
+        new EquivalentAddressGroup(Arrays.asList(addr1, addr2)),
+        new EquivalentAddressGroup(Arrays.asList(addr3))));
+    assertThat(index.seekTo(addr3)).isTrue();
+    assertThat(index.getCurrentAddress()).isSameInstanceAs(addr3);
+    assertThat(index.seekTo(addr1)).isTrue();
+    assertThat(index.getCurrentAddress()).isSameInstanceAs(addr1);
+    assertThat(index.seekTo(addr2)).isTrue();
+    assertThat(index.getCurrentAddress()).isSameInstanceAs(addr2);
+    index.seekTo(new FakeSocketAddress());
+    // Failed seekTo doesn't change the index
+    assertThat(index.getCurrentAddress()).isSameInstanceAs(addr2);
+  }
 
   /** Create ClientTransportOptions. Should not be reused if it may be mutated. */
   private ClientTransportFactory.ClientTransportOptions createClientTransportOptions() {
