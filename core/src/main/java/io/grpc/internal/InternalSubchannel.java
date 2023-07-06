@@ -126,17 +126,17 @@ final class InternalSubchannel implements InternalInstrumented<ChannelStats>, Tr
 
   // Must only be used from syncContext
   private final InUseStateAggregator<ConnectionClientTransport> inUseStateAggregator =
-          new InUseStateAggregator<ConnectionClientTransport>() {
-            @Override
-            protected void handleInUse() {
-              callback.onInUse(InternalSubchannel.this);
-            }
+        new InUseStateAggregator<ConnectionClientTransport>() {
+          @Override
+          protected void handleInUse() {
+            callback.onInUse(InternalSubchannel.this);
+          }
 
-            @Override
-            protected void handleNotInUse() {
-              callback.onNotInUse(InternalSubchannel.this);
-            }
-          };
+          @Override
+          protected void handleNotInUse() {
+            callback.onNotInUse(InternalSubchannel.this);
+          }
+        };
 
   /**
    * The to-be active transport, which is not ready yet.
@@ -155,11 +155,11 @@ final class InternalSubchannel implements InternalInstrumented<ChannelStats>, Tr
   private Status shutdownReason;
 
   InternalSubchannel(List<EquivalentAddressGroup> addressGroups, String authority, String userAgent,
-                     BackoffPolicy.Provider backoffPolicyProvider,
-                     ClientTransportFactory transportFactory, ScheduledExecutorService scheduledExecutor,
-                     Supplier<Stopwatch> stopwatchSupplier, SynchronizationContext syncContext, Callback callback,
-                     InternalChannelz channelz, CallTracer callsTracer, ChannelTracer channelTracer,
-                     InternalLogId logId, ChannelLogger channelLogger) {
+      BackoffPolicy.Provider backoffPolicyProvider,
+      ClientTransportFactory transportFactory, ScheduledExecutorService scheduledExecutor,
+      Supplier<Stopwatch> stopwatchSupplier, SynchronizationContext syncContext, Callback callback,
+      InternalChannelz channelz, CallTracer callsTracer, ChannelTracer channelTracer,
+      InternalLogId logId, ChannelLogger channelLogger) {
     Preconditions.checkNotNull(addressGroups, "addressGroups");
     Preconditions.checkArgument(!addressGroups.isEmpty(), "addressGroups is empty");
     checkListHasNoNulls(addressGroups, "addressGroups contains null entry");

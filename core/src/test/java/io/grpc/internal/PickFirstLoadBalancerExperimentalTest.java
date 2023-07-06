@@ -128,8 +128,13 @@ public class PickFirstLoadBalancerExperimentalTest {
         loadBalancer.acceptResolvedAddresses(
                 ResolvedAddresses.newBuilder().setAddresses(servers).setAttributes(affinity).build());
         verify(mockHelper, times(3)).createSubchannel(createArgsCaptor.capture());
-//    CreateSubchannelArgs args = createArgsCaptor.getValue();
-        // assertThat(args.getAddresses()).isEqualTo(servers); // need to change test case to check each address!
+        List<CreateSubchannelArgs> argsList = createArgsCaptor.getAllValues();
+        assertThat(argsList.get(0).getAddresses().get(0)).isEqualTo(servers.get(0));
+        assertThat(argsList.get(1).getAddresses().get(0)).isEqualTo(servers.get(1));
+        assertThat(argsList.get(2).getAddresses().get(0)).isEqualTo(servers.get(2));
+        assertThat(argsList.get(0).getAddresses().size()).isEqualTo(1);
+        assertThat(argsList.get(1).getAddresses().size()).isEqualTo(1);
+        assertThat(argsList.get(2).getAddresses().size()).isEqualTo(1);
         verify(mockHelper).updateBalancingState(eq(CONNECTING), pickerCaptor.capture());
         verify(mockSubchannel).requestConnection();
 
@@ -147,13 +152,16 @@ public class PickFirstLoadBalancerExperimentalTest {
                         .setLoadBalancingPolicyConfig(new PickFirstLoadBalancerExperimentalConfig(true, 123L)).build());
 
         verify(mockHelper, times(3)).createSubchannel(createArgsCaptor.capture());
-        CreateSubchannelArgs args = createArgsCaptor.getValue();
+        List<CreateSubchannelArgs> argsList = createArgsCaptor.getAllValues();
         // We should still see the same set of addresses.
-//    assertThat(args.getAddresses()).containsExactlyElementsIn(servers);
         // Because we use a fixed seed, the addresses should always be shuffled in this order.
-//    assertThat(args.getAddresses().get(0)).isEqualTo(servers.get(2));
-//    assertThat(args.getAddresses().get(1)).isEqualTo(servers.get(1));
-//    assertThat(args.getAddresses().get(2)).isEqualTo(servers.get(0));
+        assertThat(argsList.get(0).getAddresses().get(0)).isEqualTo(servers.get(1));
+        assertThat(argsList.get(1).getAddresses().get(0)).isEqualTo(servers.get(0));
+        assertThat(argsList.get(2).getAddresses().get(0)).isEqualTo(servers.get(2));
+        assertThat(argsList.get(0).getAddresses().size()).isEqualTo(1);
+        assertThat(argsList.get(1).getAddresses().size()).isEqualTo(1);
+        assertThat(argsList.get(2).getAddresses().size()).isEqualTo(1);
+
         verify(mockHelper).updateBalancingState(eq(CONNECTING), pickerCaptor.capture());
         verify(mockSubchannel).requestConnection();
 
@@ -171,8 +179,13 @@ public class PickFirstLoadBalancerExperimentalTest {
                         .setLoadBalancingPolicyConfig(new PickFirstLoadBalancerExperimentalConfig(false)).build());
 
         verify(mockHelper, times(3)).createSubchannel(createArgsCaptor.capture());
-//    CreateSubchannelArgs args = createArgsCaptor.getValue();
-//    assertThat(args.getAddresses()).isEqualTo(servers);
+        List<CreateSubchannelArgs> argsList = createArgsCaptor.getAllValues();
+        assertThat(argsList.get(0).getAddresses().get(0)).isEqualTo(servers.get(0));
+        assertThat(argsList.get(1).getAddresses().get(0)).isEqualTo(servers.get(1));
+        assertThat(argsList.get(2).getAddresses().get(0)).isEqualTo(servers.get(2));
+        assertThat(argsList.get(0).getAddresses().size()).isEqualTo(1);
+        assertThat(argsList.get(1).getAddresses().size()).isEqualTo(1);
+        assertThat(argsList.get(2).getAddresses().size()).isEqualTo(1);
         verify(mockHelper).updateBalancingState(eq(CONNECTING), pickerCaptor.capture());
         verify(mockSubchannel).requestConnection();
 
@@ -213,7 +226,7 @@ public class PickFirstLoadBalancerExperimentalTest {
     public void refreshNameResolutionAfterSubchannelConnectionBroken() {
         loadBalancer.acceptResolvedAddresses(
                 ResolvedAddresses.newBuilder().setAddresses(servers).setAttributes(affinity).build());
-        verify(mockHelper).createSubchannel(any(CreateSubchannelArgs.class));
+        verify(mockHelper, times(3)).createSubchannel(createArgsCaptor.capture());
 
         InOrder inOrder = inOrder(mockHelper, mockSubchannel);
         inOrder.verify(mockSubchannel).start(stateListenerCaptor.capture());
@@ -274,8 +287,13 @@ public class PickFirstLoadBalancerExperimentalTest {
                 ResolvedAddresses.newBuilder().setAddresses(servers).setAttributes(affinity).build());
         inOrder.verify(mockHelper, times(3)).createSubchannel(createArgsCaptor.capture());
         verify(mockSubchannel).start(any(SubchannelStateListener.class));
-//    CreateSubchannelArgs args = createArgsCaptor.getValue();
-//    assertThat(args.getAddresses()).isEqualTo(servers);
+        List<CreateSubchannelArgs> argsList = createArgsCaptor.getAllValues();
+        assertThat(argsList.get(0).getAddresses().get(0)).isEqualTo(servers.get(0));
+        assertThat(argsList.get(1).getAddresses().get(0)).isEqualTo(servers.get(1));
+        assertThat(argsList.get(2).getAddresses().get(0)).isEqualTo(servers.get(2));
+        assertThat(argsList.get(0).getAddresses().size()).isEqualTo(1);
+        assertThat(argsList.get(1).getAddresses().size()).isEqualTo(1);
+        assertThat(argsList.get(2).getAddresses().size()).isEqualTo(1);
         inOrder.verify(mockHelper).updateBalancingState(eq(CONNECTING), pickerCaptor.capture());
         verify(mockSubchannel).requestConnection();
         assertEquals(mockSubchannel, pickerCaptor.getValue().pickSubchannel(mockArgs).getSubchannel());
@@ -295,8 +313,13 @@ public class PickFirstLoadBalancerExperimentalTest {
         loadBalancer.acceptResolvedAddresses(
                 ResolvedAddresses.newBuilder().setAddresses(servers).setAttributes(affinity).build());
         inOrder.verify(mockHelper, times(3)).createSubchannel(createArgsCaptor.capture());
-        CreateSubchannelArgs args = createArgsCaptor.getValue();
-//    assertThat(args.getAddresses()).isEqualTo(servers);
+        List<CreateSubchannelArgs> argsList = createArgsCaptor.getAllValues();
+        assertThat(argsList.get(0).getAddresses().get(0)).isEqualTo(servers.get(0));
+        assertThat(argsList.get(1).getAddresses().get(0)).isEqualTo(servers.get(1));
+        assertThat(argsList.get(2).getAddresses().get(0)).isEqualTo(servers.get(2));
+        assertThat(argsList.get(0).getAddresses().size()).isEqualTo(1);
+        assertThat(argsList.get(1).getAddresses().size()).isEqualTo(1);
+        assertThat(argsList.get(2).getAddresses().size()).isEqualTo(1);
         verify(mockSubchannel).start(stateListenerCaptor.capture());
         SubchannelStateListener stateListener = stateListenerCaptor.getValue();
         verify(mockHelper).updateBalancingState(eq(CONNECTING), pickerCaptor.capture());
@@ -329,9 +352,14 @@ public class PickFirstLoadBalancerExperimentalTest {
 
         loadBalancer.acceptResolvedAddresses(
                 ResolvedAddresses.newBuilder().setAddresses(servers).setAttributes(affinity).build());
-        inOrder.verify(mockHelper).createSubchannel(createArgsCaptor.capture());
-        CreateSubchannelArgs args = createArgsCaptor.getValue();
-        assertThat(args.getAddresses()).isEqualTo(servers);
+        verify(mockHelper, times(3)).createSubchannel(createArgsCaptor.capture());
+        List<CreateSubchannelArgs> argsList = createArgsCaptor.getAllValues();
+        assertThat(argsList.get(0).getAddresses().get(0)).isEqualTo(servers.get(0));
+        assertThat(argsList.get(1).getAddresses().get(0)).isEqualTo(servers.get(1));
+        assertThat(argsList.get(2).getAddresses().get(0)).isEqualTo(servers.get(2));
+        assertThat(argsList.get(0).getAddresses().size()).isEqualTo(1);
+        assertThat(argsList.get(1).getAddresses().size()).isEqualTo(1);
+        assertThat(argsList.get(2).getAddresses().size()).isEqualTo(1);
         verify(mockSubchannel).start(stateListenerCaptor.capture());
         SubchannelStateListener stateListener = stateListenerCaptor.getValue();
         verify(mockHelper).updateBalancingState(eq(CONNECTING), pickerCaptor.capture());
@@ -398,10 +426,18 @@ public class PickFirstLoadBalancerExperimentalTest {
 
         loadBalancer.acceptResolvedAddresses(
                 ResolvedAddresses.newBuilder().setAddresses(servers).setAttributes(affinity).build());
-        inOrder.verify(mockHelper).createSubchannel(createArgsCaptor.capture());
-        CreateSubchannelArgs args = createArgsCaptor.getValue();
-        assertThat(args.getAddresses()).isEqualTo(servers);
-        assertThat(args.getAttributes()).isEqualTo(Attributes.EMPTY);
+        inOrder.verify(mockHelper, times(3)).createSubchannel(createArgsCaptor.capture());
+        List<CreateSubchannelArgs> argsList = createArgsCaptor.getAllValues();
+        assertThat(argsList.get(0).getAddresses().get(0)).isEqualTo(servers.get(0));
+        assertThat(argsList.get(1).getAddresses().get(0)).isEqualTo(servers.get(1));
+        assertThat(argsList.get(2).getAddresses().get(0)).isEqualTo(servers.get(2));
+        assertThat(argsList.get(0).getAttributes()).isEqualTo(Attributes.EMPTY);
+        assertThat(argsList.get(1).getAttributes()).isEqualTo(Attributes.EMPTY);
+        assertThat(argsList.get(2).getAttributes()).isEqualTo(Attributes.EMPTY);
+        assertThat(argsList.get(0).getAddresses().size()).isEqualTo(1);
+        assertThat(argsList.get(1).getAddresses().size()).isEqualTo(1);
+        assertThat(argsList.get(2).getAddresses().size()).isEqualTo(1);
+
         inOrder.verify(mockHelper).updateBalancingState(eq(CONNECTING), pickerCaptor.capture());
         verify(mockSubchannel).requestConnection();
 
@@ -419,10 +455,15 @@ public class PickFirstLoadBalancerExperimentalTest {
         InOrder inOrder = inOrder(mockHelper);
         loadBalancer.acceptResolvedAddresses(
                 ResolvedAddresses.newBuilder().setAddresses(servers).setAttributes(affinity).build());
-        inOrder.verify(mockHelper).createSubchannel(createArgsCaptor.capture());
+        verify(mockHelper, times(3)).createSubchannel(createArgsCaptor.capture());
         verify(mockSubchannel).start(stateListenerCaptor.capture());
-        CreateSubchannelArgs args = createArgsCaptor.getValue();
-        assertThat(args.getAddresses()).isEqualTo(servers);
+        List<CreateSubchannelArgs> argsList = createArgsCaptor.getAllValues();
+        assertThat(argsList.get(0).getAddresses().get(0)).isEqualTo(servers.get(0));
+        assertThat(argsList.get(1).getAddresses().get(0)).isEqualTo(servers.get(1));
+        assertThat(argsList.get(2).getAddresses().get(0)).isEqualTo(servers.get(2));
+        assertThat(argsList.get(0).getAddresses().size()).isEqualTo(1);
+        assertThat(argsList.get(1).getAddresses().size()).isEqualTo(1);
+        assertThat(argsList.get(2).getAddresses().size()).isEqualTo(1);
 
         inOrder.verify(mockHelper).updateBalancingState(eq(CONNECTING), any(SubchannelPicker.class));
 
@@ -463,11 +504,13 @@ public class PickFirstLoadBalancerExperimentalTest {
 
         verify(mockHelper, times(3)).createSubchannel(createArgsCaptor.capture());
         verify(mockSubchannel).start(stateListenerCaptor.capture());
-        List<CreateSubchannelArgs> args = createArgsCaptor.getAllValues();
-        assertThat(args.get(0).getAddresses()).isEqualTo(servers.get(0));
-        assertThat(args.get(1).getAddresses()).isEqualTo(servers.get(1).getAddresses());
-        assertThat(args.get(2).getAddresses()).isEqualTo(servers.get(2).getAddresses());
-//    assertThat(args.getAddresses()).isEqualTo(servers);
+        List<CreateSubchannelArgs> argsList = createArgsCaptor.getAllValues();
+        assertThat(argsList.get(0).getAddresses().get(0)).isEqualTo(servers.get(0));
+        assertThat(argsList.get(1).getAddresses().get(0)).isEqualTo(servers.get(1));
+        assertThat(argsList.get(2).getAddresses().get(0)).isEqualTo(servers.get(2));
+        assertThat(argsList.get(0).getAddresses().size()).isEqualTo(1);
+        assertThat(argsList.get(1).getAddresses().size()).isEqualTo(1);
+        assertThat(argsList.get(2).getAddresses().size()).isEqualTo(1);
         SubchannelStateListener stateListener = stateListenerCaptor.getValue();
 
         stateListener.onSubchannelState(ConnectivityStateInfo.forNonError(IDLE));

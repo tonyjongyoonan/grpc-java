@@ -16,7 +16,7 @@
 
 package io.grpc.internal;
 
-import static com.google.common.base.Preconditions.checkNotNull;
+import com.google.common.base.Preconditions;
 import static io.grpc.ConnectivityState.CONNECTING;
 import static io.grpc.ConnectivityState.IDLE;
 import static io.grpc.ConnectivityState.SHUTDOWN;
@@ -24,19 +24,10 @@ import static io.grpc.ConnectivityState.TRANSIENT_FAILURE;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.MoreObjects;
-import io.grpc.Attributes;
-import io.grpc.ConnectivityState;
-import io.grpc.ConnectivityStateInfo;
-import io.grpc.EquivalentAddressGroup;
-import io.grpc.LoadBalancer;
-import io.grpc.Status;
+import io.grpc.*;
 
 import java.net.SocketAddress;
-import java.util.Arrays;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Random;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import javax.annotation.Nullable;
 
@@ -53,6 +44,11 @@ final class PickFirstLoadBalancerExperimental extends LoadBalancer {
     private volatile List<Subchannel> subchannels = new ArrayList<>(); // does this need to be thread-safe/volatile?
     private int index;
     private ConnectivityState currentState = IDLE;
+
+    /**
+     * All field must be mutated in the syncContext.
+     */
+    private final SynchronizationContext syncContext;
 
     PickFirstLoadBalancerExperimental(Helper helper) {
         this.helper = checkNotNull(helper, "helper");
@@ -105,6 +101,75 @@ final class PickFirstLoadBalancerExperimental extends LoadBalancer {
     }
 
     public void updateAddresses(final List<EquivalentAddressGroup> newAddressGroups) {
+//        Preconditions.checkNotNull(newAddressGroups, "newAddressGroups");
+//        checkListHasNoNulls(newAddressGroups, "newAddressGroups contains null entry");
+//        Preconditions.checkArgument(!newAddressGroups.isEmpty(), "newAddressGroups is empty");
+//        final List<EquivalentAddressGroup> newImmutableAddressGroups =
+//            Collections.unmodifiableList(new ArrayList<>(newAddressGroups));
+//        syncContext.execute(new Runnable() {
+//          @Override
+//          public void run() {
+//            ManagedClientTransport savedTransport = null;
+//            InternalSubchannel previousChannel = subchannels.get(index).getInternalSubchannel();
+//            EquivalentAddressGroup previousAddress = subchannels.get(index).getAddresses();
+//            this.addressGroups = newImmutableAddressGroups;
+//            // assumes we only have one address in EAG according to new architectural changes
+//            Set<Subchannel> subchannelSet = new HashSet<>(subchannels);
+//            List<Subchannel> newSubchannels = new ArrayList<>();
+//            for (EquivalentAddressGroup addressGroup : newAddressGroups) {
+//                if (subchannelSet.contains(addressGroup))
+//            }
+//
+//            if (state.getState() == READY || state.getState() == CONNECTING) {
+//                if (newAddressGroups.contains(previousAddress));
+//              if (!addressIndex.seekTo(previousAddress)) {
+//                  // Forced to drop the connection
+//                    if (state.getState() == READY) {
+//                      savedTransport = activeTransport;
+//                      activeTransport = null;
+//                      addressIndex.reset();
+//                      gotoNonErrorState(IDLE);
+//                    } else {
+//                      pendingTransport.shutdown(
+//                          Status.UNAVAILABLE.withDescription(
+//                            "InternalSubchannel closed pending transport due to address change"));
+//                      pendingTransport = null;
+//        //              addressIndex.reset();
+//                      startNewTransport();
+//                    }
+//                  }
+//                }
+//                if (savedTransport != null) {
+//                  if (shutdownDueToUpdateTask != null) {
+//                    // Keeping track of multiple shutdown tasks adds complexity, and shouldn't generally be
+//                    // necessary. This transport has probably already had plenty of time.
+//                    shutdownDueToUpdateTransport.shutdown(
+//                        Status.UNAVAILABLE.withDescription(
+//                            "InternalSubchannel closed transport early due to address change"));
+//                    shutdownDueToUpdateTask.cancel();
+//                    shutdownDueToUpdateTask = null;
+//                    shutdownDueToUpdateTransport = null;
+//                  }
+//                  // Avoid needless RPC failures by delaying the shutdown. See
+//                  // https://github.com/grpc/grpc-java/issues/2562
+//                  shutdownDueToUpdateTransport = savedTransport;
+//                  shutdownDueToUpdateTask = syncContext.schedule(
+//                      new Runnable() {
+//                        @Override public void run() {
+//                          ManagedClientTransport transport = shutdownDueToUpdateTransport;
+//                          shutdownDueToUpdateTask = null;
+//                          shutdownDueToUpdateTransport = null;
+//                          transport.shutdown(
+//                              Status.UNAVAILABLE.withDescription(
+//                                  "InternalSubchannel closed transport due to address change"));
+//                        }
+//                      },
+//                      ManagedChannelImpl.SUBCHANNEL_SHUTDOWN_DELAY_SECONDS,
+//                      TimeUnit.SECONDS,
+//                      scheduledExecutor);
+//                }
+//              }
+//            });
     }
     @Override
     public void handleNameResolutionError(Status error) {
@@ -195,6 +260,12 @@ final class PickFirstLoadBalancerExperimental extends LoadBalancer {
             });
             subchannels.get(index).requestConnection();
         }
+    }
+
+    private static void checkListHasNoNulls(List<?> list, String msg) {
+      for (Object item : list) {
+        Preconditions.checkNotNull(item, msg);
+      }
     }
 
     /**
