@@ -226,7 +226,7 @@ public class InternalSubchannelExperimentalTest {
         verify(mockBackoffPolicyProvider, times(++backoffReset)).get();
 
         // Second attempt
-        // Transport creation doesn't happen until time is due
+        // Tranççsport creation doesn't happen until time is due
         fakeClock.forwardNanos(9);
         assertNull(InternalSubchannelExperimental.obtainActiveTransport());
         verify(mockTransportFactory, times(transportsCreated))
