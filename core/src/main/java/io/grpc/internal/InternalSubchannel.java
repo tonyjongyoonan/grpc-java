@@ -217,7 +217,7 @@ final class InternalSubchannel implements InternalInstrumented<ChannelStats>, Tr
 
         Preconditions.checkState(reconnectTask == null, "Should have no reconnectTask scheduled");
 
-        // move connectingTimer to PFLB
+        // move connectingTimer to PFLB?
 //    if (addressIndex.isAtBeginning()) {
 //      connectingTimer.reset().start();
 //    }

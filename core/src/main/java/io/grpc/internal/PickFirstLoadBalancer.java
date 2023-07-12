@@ -108,19 +108,18 @@ final class PickFirstLoadBalancer extends LoadBalancer {
       helper.getSynchronizationContext().execute(new Runnable() {
         @Override
         public void run() {
-          SocketAddress previousAddress = subchannels.get(0).getAllAddresses().get(0).getAddresses().get(0);
+          SocketAddress previousAddress = subchannels.get(index).getAddresses().getAddresses().get(0);
+          index = 0;
           addressGroups = newImmutableAddressGroups;
           if (currentState == READY || currentState == CONNECTING) {
             if (seekTo(newAddressGroups, previousAddress) == -1) {
               // forced to drop the connection
                   if (currentState == READY) {
-                    index = 0;
                     // TODO: new state? how to handle
                   } else {
                     // TODO: shut everything down? aka just shut one down but with happy eyeballs
                     // TODO: we would need to shut everything down
                     shutdown();
-                    index = 0;
                     requestConnection();
                   }
             } else {
@@ -239,8 +238,8 @@ final class PickFirstLoadBalancer extends LoadBalancer {
             if (newState == CONNECTING) {
                 return;
             } else if (newState == IDLE) {
-                index++;
-                requestConnection(); // TODO: desired behavior here?? next or current
+                index = 0;
+                requestConnection(); // TODO: next or current, confirm
                 return;
             }
         }
@@ -249,8 +248,7 @@ final class PickFirstLoadBalancer extends LoadBalancer {
         switch (newState) {
             case IDLE:
                 index++;
-                picker = new RequestConnectionPicker(subchannel); // TODO: why do we need a picker? why not just directly call
-                // TODO: if this requests a connection internally in InternalSubchannel, this must be fixed.
+                picker = new RequestConnectionPicker(subchannel); // TODO: should we request for connection directly?
                 break;
             case CONNECTING:
                 // It's safe to use RequestConnectionPicker here, so when coming from IDLE we could leave
@@ -259,15 +257,23 @@ final class PickFirstLoadBalancer extends LoadBalancer {
                 break;
             case READY:
                 picker = new Picker(PickResult.withSubchannel(subchannel));
+                updateBalancingState(READY, picker);
                 break;
             case TRANSIENT_FAILURE:
-                picker = new Picker(PickResult.withError(stateInfo.getStatus()));
+                if (index == subchannels.size() - 1) {
+                  picker = new Picker(PickResult.withError(stateInfo.getStatus()));
+                  updateBalancingState(TRANSIENT_FAILURE, picker);
+                  // scheduleBackoff(s);
+                } else {
+                  index++;
+                  requestConnection();
+                  picker = new Picker(PickResult.withSubchannel(subchannel));
+                }
                 break;
             default:
                 throw new IllegalArgumentException("Unsupported state:" + newState);
         }
 
-        updateBalancingState(newState, picker);
     }
 
     private void updateBalancingState(ConnectivityState state, SubchannelPicker picker) {
@@ -285,7 +291,7 @@ final class PickFirstLoadBalancer extends LoadBalancer {
     }
 
     @Override
-    public void requestConnection() {
+    public void requestConnection() { // TODO: only start subchannel if it is new connection
         if (index < subchannels.size() && subchannels.get(index) != null) {
             subchannels.get(index).start(new SubchannelStateListener() {
                 @Override
