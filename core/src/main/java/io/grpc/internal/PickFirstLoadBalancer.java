@@ -39,9 +39,10 @@ import javax.annotation.Nullable;
  */
 final class PickFirstLoadBalancer extends LoadBalancer {
     private final Helper helper;
-    private volatile List<EquivalentAddressGroup> addressGroups;
-    private volatile List<Subchannel> subchannels = new ArrayList<>(); // does this need to be thread-safe/volatile?
+    private List<EquivalentAddressGroup> addressGroups;
+    private List<Subchannel> subchannels = new ArrayList<>();
     private volatile int index;
+
     private volatile ConnectivityState currentState = IDLE;
 
 //    /**
@@ -84,7 +85,7 @@ final class PickFirstLoadBalancer extends LoadBalancer {
                     addresses.add(new EquivalentAddressGroup(address));
                     final Subchannel subchannel = helper.createSubchannel(
                             CreateSubchannelArgs.newBuilder()
-                                    .setAddresses(addresses) // TODO: confirm send single address in eag in list?
+                                    .setAddresses(addresses)
                                     .build());
                     subchannels.add(subchannel);
                 }
@@ -185,33 +186,12 @@ final class PickFirstLoadBalancer extends LoadBalancer {
 //        }
 //      }
 //    });
-//          for (int i = 0; i < newAddressGroups.size(); i++) {
-//            for (int j = 0; j < newAddressGroups.get(i).getAddresses().size(); j++) {
-//              if (subchannels. newAddressGroups.get(i).getAddresses().get(j)) {
-//
-//              }
-//            }
-//          }
-//
-//          for (int i = 0; i < subchannels.size(); i++) {
-//
-//            if ()
-//          }
-//          For (old address: old address)
-//          	If (new addresses contains old address)
-//          		Add to new list
-//
-//
-//          For (new address : new addresses)
-//                If (new list doesn’t contain new address)
-//          		add to new list
-//        }
-//      }
 
     @Override
     public void handleNameResolutionError(Status error) {
       for (Subchannel subchannel : subchannels) {
         subchannel.shutdown();
+        subchannels.remove(subchannel);
         subchannel = null;
       }
       index = 0;
@@ -220,7 +200,7 @@ final class PickFirstLoadBalancer extends LoadBalancer {
       updateBalancingState(TRANSIENT_FAILURE, new Picker(PickResult.withError(error)));
     }
 
-    private void processSubchannelState(Subchannel subchannel, ConnectivityStateInfo stateInfo) {
+    void processSubchannelState(Subchannel subchannel, ConnectivityStateInfo stateInfo) {
         ConnectivityState newState = stateInfo.getState();
         if (newState == SHUTDOWN) {
             return;
@@ -247,7 +227,8 @@ final class PickFirstLoadBalancer extends LoadBalancer {
         SubchannelPicker picker;
         switch (newState) {
             case IDLE:
-                index++;
+                // shutdown when ready
+                index = 0;
                 picker = new RequestConnectionPicker(subchannel); // TODO: should we request for connection directly?
                 break;
             case CONNECTING:
@@ -267,7 +248,7 @@ final class PickFirstLoadBalancer extends LoadBalancer {
                 } else {
                   index++;
                   requestConnection();
-                  picker = new Picker(PickResult.withSubchannel(subchannel));
+                  picker = new Picker(PickResult.withNoResult());
                 }
                 break;
             default:
@@ -300,7 +281,7 @@ final class PickFirstLoadBalancer extends LoadBalancer {
                 }
             });
             updateBalancingState(CONNECTING,
-                new Picker(PickResult.withSubchannel(subchannels.get(index))));
+                new Picker(PickResult.withNoResult()));
             subchannels.get(index).requestConnection();
         }
     }

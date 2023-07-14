@@ -263,7 +263,7 @@ final class InternalSubchannel implements InternalInstrumented<ChannelStats>, Tr
      * @param status the causal status when the channel begins transition to
      *     TRANSIENT_FAILURE.
      */
-    void scheduleBackoff(final Status status) { // made package private to call from pick first
+    private void scheduleBackoff(final Status status) {
         syncContext.throwIfNotInThisSynchronizationContext();
 
         class EndOfCurrentBackoff implements Runnable {
@@ -572,13 +572,12 @@ final class InternalSubchannel implements InternalInstrumented<ChannelStats>, Tr
                         return;
                     }
                     if (activeTransport == transport) {
+                        // told to shutdown when ready
                         activeTransport = null;
-//            addressIndex.reset();
                         gotoNonErrorState(IDLE);
                     } else if (pendingTransport == transport) {
                         Preconditions.checkState(state.getState() == CONNECTING,
                                 "Expected state is CONNECTING, actual state is %s", state.getState());
-//            addressIndex.increment();
                         // Continue reconnect if there are still addresses to try.
                       if (true) { // TODO: fix
                         scheduleBackoff(s);
