@@ -332,11 +332,11 @@ final class WeightedRoundRobinLoadBalancer extends RoundRobinLoadBalancer {
    * The Static Stride Scheduler is an implementation of an earliest deadline first (EDF) scheduler
    * in which each object's deadline is the multiplicative inverse of the object's weight.
    * <p>
-   * The way in which this is implemented is through a static stride scheduler. 
+   * The way in which this is implemented is through a static stride scheduler.
    * The Static Stride Scheduler works by iterating through the list of subchannel weights
-   * and using modular arithmetic to proportionally distribute picks, favoring entries 
-   * with higher weights. It is based on the observation that the intended sequence generated 
-   * from an EDF scheduler is a periodic one that can be achieved through modular arithmetic. 
+   * and using modular arithmetic to proportionally distribute picks, favoring entries
+   * with higher weights. It is based on the observation that the intended sequence generated
+   * from an EDF scheduler is a periodic one that can be achieved through modular arithmetic.
    * The Static Stride Scheduler is more performant than other implementations of the EDF
    * Scheduler, as it removes the need for a priority queue (and thus mutex locks).
    * <p>
@@ -350,7 +350,6 @@ final class WeightedRoundRobinLoadBalancer extends RoundRobinLoadBalancer {
   @VisibleForTesting
   static final class StaticStrideScheduler {
     private final short[] scaledWeights;
-    private final int sizeDivisor;
     private final AtomicInteger sequence;
     private static final int K_MAX_WEIGHT = 0xFFFF;
 
@@ -373,7 +372,7 @@ final class WeightedRoundRobinLoadBalancer extends RoundRobinLoadBalancer {
       if (numWeightedChannels > 0) {
         meanWeight = (short) Math.round(scalingFactor * sumWeight / numWeightedChannels);
       } else {
-        meanWeight = 1;
+        meanWeight = (short) Math.round(scalingFactor);
       }
 
       // scales weights s.t. max(weights) == K_MAX_WEIGHT, meanWeight is scaled accordingly
@@ -387,7 +386,6 @@ final class WeightedRoundRobinLoadBalancer extends RoundRobinLoadBalancer {
       }
 
       this.scaledWeights = scaledWeights;
-      this.sizeDivisor = numChannels;
       this.sequence = new AtomicInteger(random.nextInt());
 
     }
@@ -435,11 +433,11 @@ final class WeightedRoundRobinLoadBalancer extends RoundRobinLoadBalancer {
     int pick() {
       while (true) {
         long sequence = this.nextSequence();
-        int backendIndex = (int) (sequence % this.sizeDivisor);
-        long generation = sequence / this.sizeDivisor;
-        int weight = Short.toUnsignedInt(this.scaledWeights[backendIndex]);
+        int backendIndex = (int) (sequence % scaledWeights.length);
+        long generation = sequence / scaledWeights.length;
+        int weight = Short.toUnsignedInt(scaledWeights[backendIndex]);
         long offset = (long) K_MAX_WEIGHT / 2 * backendIndex;
-        if ((weight * generation + offset) % K_MAX_WEIGHT < K_MAX_WEIGHT - weight) {
+        if ((offset + weight * generation) % K_MAX_WEIGHT < K_MAX_WEIGHT - weight) {
           continue;
         }
         return backendIndex;
