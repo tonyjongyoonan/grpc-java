@@ -20,7 +20,7 @@ subprojects {
     apply plugin: "net.ltgt.errorprone"
 
     group = "io.grpc"
-    version = "1.57.0-SNAPSHOT" // CURRENT_GRPC_VERSION
+    version = "1.58.0-SNAPSHOT" // CURRENT_GRPC_VERSION
 
     repositories {
         maven { // The google mirror is less flaky than mavenCentral()
@@ -162,7 +162,8 @@ subprojects {
 
     checkstyle {
         configDirectory = file("$rootDir/buildscripts")
-        toolVersion = libs.checkstyle.get().version
+        toolVersion = JavaVersion.current().isJava11Compatible() ? libs.checkstyle.get().version : libs.checkstylejava8.get().version 
+
         ignoreFailures = false
         if (rootProject.hasProperty("checkstyle.ignoreFailures")) {
             ignoreFailures = rootProject.properties["checkstyle.ignoreFailures"].toBoolean()
@@ -181,9 +182,6 @@ subprojects {
     }
 
     plugins.withId("java") {
-        sourceCompatibility = 1.8
-        targetCompatibility = 1.8
-
         dependencies {
             testImplementation libraries.junit,
                     libraries.mockito.core,
@@ -239,12 +237,25 @@ subprojects {
             }
         }
 
+        tasks.withType(JavaCompile).configureEach {
+            if (JavaVersion.current().isJava9Compatible()) {
+                options.release = 8
+            } else {
+                sourceCompatibility = 1.8
+                targetCompatibility = 1.8
+            }
+        }
         tasks.named("compileJava").configure {
             // This project targets Java 7 (no time.Duration class)
             options.errorprone.check("PreferJavaTimeOverload", CheckSeverity.OFF)
             options.errorprone.check("JavaUtilDate", CheckSeverity.OFF)
             // The warning fails to provide a source location
             options.errorprone.check("MissingSummary", CheckSeverity.OFF)
+
+            // TODO(https://github.com/grpc/grpc-java/issues/10372): remove when fixed.
+            if (JavaVersion.current().isJava11Compatible()) {
+              options.errorprone.check("StringCaseLocaleUsage", CheckSeverity.OFF)
+            }
         }
         tasks.named("compileTestJava").configure {
             // LinkedList doesn't hurt much in tests and has lots of usages
@@ -271,7 +282,7 @@ subprojects {
                 requireUpperBoundDepsMatch(configurations.runtimeClasspath, project)
             }
         }
-        tasks.named('compileJava').configure {
+        tasks.named('assemble').configure {
             dependsOn checkUpperBoundDeps
         }
     }
@@ -279,10 +290,6 @@ subprojects {
     plugins.withId("me.champeau.jmh") {
         // invoke jmh on a single benchmark class like so:
         //   ./gradlew -PjmhIncludeSingleClass=StatsTraceContextBenchmark clean :grpc-core:jmh
-	tasks.named("compileJmhJava").configure {
-	    sourceCompatibility = 1.8
-	    targetCompatibility = 1.8
-	}
         tasks.named("jmh").configure {
             warmupIterations = 10
             iterations = 10
@@ -504,6 +511,11 @@ def requireUpperBoundDepsMatch(Configuration conf, Project project) {
                 + "to diagnose")
         }
         result.selected.dependencies.each {
+            // Category.CATEGORY_ATTRIBUTE is the inappropriate Attribute because it is "desugared".
+            // https://github.com/gradle/gradle/issues/8854
+            Attribute<String> category = Attribute.of('org.gradle.category', String)
+            if (it.resolvedVariant.attributes.getAttribute(category) != Category.LIBRARY)
+                return
             queue.add(new DepAndParents(
                 dep: it, parents: depAndParents.parents + [artifact + ":" + version]))
         }
@@ -568,7 +580,7 @@ tasks.register('checkForUpdates') {
             if (oldResolved != newResolved) {
                 def oldId = oldResolved.id.componentIdentifier
                 def newId = newResolved.id.componentIdentifier
-                println("${newId.group}:${newId.module} ${oldId.version} -> ${newId.version}")
+                println("libs.${name} = ${newId.group}:${newId.module} ${oldId.version} -> ${newId.version}")
             }
         }
     }

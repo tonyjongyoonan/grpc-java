@@ -352,6 +352,8 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
    * small of a value as necessary.
    *
    * @throws UnsupportedOperationException if unsupported
+   * @see <a href="https://github.com/grpc/proposal/blob/master/A8-client-side-keepalive.md">gRFC A8
+   *     Client-side Keepalive</a>
    * @since 1.7.0
    */
   public T keepAliveTime(long keepAliveTime, TimeUnit timeUnit) {
@@ -366,6 +368,8 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
    * <p>This value should be at least multiple times the RTT to allow for lost packets.
    *
    * @throws UnsupportedOperationException if unsupported
+   * @see <a href="https://github.com/grpc/proposal/blob/master/A8-client-side-keepalive.md">gRFC A8
+   *     Client-side Keepalive</a>
    * @since 1.7.0
    */
   public T keepAliveTimeout(long keepAliveTimeout, TimeUnit timeUnit) {
@@ -383,6 +387,8 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
    *
    * @throws UnsupportedOperationException if unsupported
    * @see #keepAliveTime(long, TimeUnit)
+   * @see <a href="https://github.com/grpc/proposal/blob/master/A8-client-side-keepalive.md">gRFC A8
+   *     Client-side Keepalive</a>
    * @since 1.7.0
    */
   public T keepAliveWithoutCalls(boolean enable) {
@@ -571,10 +577,10 @@ public abstract class ManagedChannelBuilder<T extends ManagedChannelBuilder<T>> 
    *   return o;
    * }}</pre>
    *
+   * @return this
    * @throws IllegalArgumentException When the given serviceConfig is invalid or the current version
    *         of grpc library can not parse it gracefully. The state of the builder is unchanged if
    *         an exception is thrown.
-   * @return this
    * @since 1.20.0
    */
   @ExperimentalApi("https://github.com/grpc/grpc-java/issues/5189")
