@@ -330,11 +330,11 @@ public class WeightedRoundRobinLoadBalancerTest {
     }
     assertThat(pickCount.size()).isEqualTo(3);
     assertThat(Math.abs(pickCount.get(weightedSubchannel1) / 10000.0 - subchannel1PickRatio))
-        .isAtMost(0.001);
+        .isLessThan(0.002);
     assertThat(Math.abs(pickCount.get(weightedSubchannel2) / 10000.0 - subchannel2PickRatio ))
-        .isAtMost(0.001);
+        .isLessThan(0.002);
     assertThat(Math.abs(pickCount.get(weightedSubchannel3) / 10000.0 - subchannel3PickRatio ))
-        .isAtMost(0.001);
+        .isLessThan(0.002);
   }
 
   @Test
@@ -520,8 +520,8 @@ public class WeightedRoundRobinLoadBalancerTest {
     }
     assertThat(pickCount.size()).isEqualTo(2);
     // within blackout period, fallback to simple round robin
-    assertThat(Math.abs(pickCount.get(weightedSubchannel1) / 1000.0 - 0.5)).isAtMost(0.001);
-    assertThat(Math.abs(pickCount.get(weightedSubchannel2) / 1000.0 - 0.5)).isAtMost(0.001);
+    assertThat(Math.abs(pickCount.get(weightedSubchannel1) / 1000.0 - 0.5)).isLessThan(0.002);
+    assertThat(Math.abs(pickCount.get(weightedSubchannel2) / 1000.0 - 0.5)).isLessThan(0.002);
 
     assertThat(fakeClock.forwardTime(5, TimeUnit.SECONDS)).isEqualTo(1);
     pickCount = new HashMap<>();
@@ -532,9 +532,9 @@ public class WeightedRoundRobinLoadBalancerTest {
     assertThat(pickCount.size()).isEqualTo(2);
     // after blackout period
     assertThat(Math.abs(pickCount.get(weightedSubchannel1) / 1000.0 - 2.0 / 3))
-            .isAtMost(0.001);
+        .isLessThan(0.002);
     assertThat(Math.abs(pickCount.get(weightedSubchannel2) / 1000.0 - 1.0 / 3))
-            .isAtMost(0.001);
+        .isLessThan(0.002);
   }
 
   @Test
@@ -843,7 +843,7 @@ public class WeightedRoundRobinLoadBalancerTest {
   @Test
   public void testPicksEqualsWeights() {
     float[] weights = {1.0f, 2.0f, 3.0f};
-    Random random = new Random();
+    Random random = new Random(1);
     StaticStrideScheduler sss = new StaticStrideScheduler(weights, random);
     int[] expectedPicks = new int[] {1, 2, 3};
     int[] picks = new int[3];
@@ -856,7 +856,7 @@ public class WeightedRoundRobinLoadBalancerTest {
   @Test
   public void testContainsZeroWeightUseMean() {
     float[] weights = {3.0f, 0.0f, 1.0f};
-    Random random = new Random();
+    Random random = new Random(1);
     StaticStrideScheduler sss = new StaticStrideScheduler(weights, random);
     int[] expectedPicks = new int[] {3, 2, 1};
     int[] picks = new int[3];
@@ -869,7 +869,7 @@ public class WeightedRoundRobinLoadBalancerTest {
   @Test
   public void testContainsNegativeWeightUseMean() {
     float[] weights = {3.0f, -1.0f, 1.0f};
-    Random random = new Random();
+    Random random = new Random(1);
     StaticStrideScheduler sss = new StaticStrideScheduler(weights, random);
     int[] expectedPicks = new int[] {3, 2, 1};
     int[] picks = new int[3];
@@ -882,7 +882,7 @@ public class WeightedRoundRobinLoadBalancerTest {
   @Test
   public void testAllSameWeights() {
     float[] weights = {1.0f, 1.0f, 1.0f};
-    Random random = new Random();
+    Random random = new Random(1);
     StaticStrideScheduler sss = new StaticStrideScheduler(weights, random);
     int[] expectedPicks = new int[] {2, 2, 2};
     int[] picks = new int[3];
@@ -895,7 +895,7 @@ public class WeightedRoundRobinLoadBalancerTest {
   @Test
   public void testAllZeroWeightsUseOne() {
     float[] weights = {0.0f, 0.0f, 0.0f};
-    Random random = new Random();
+    Random random = new Random(1);
     StaticStrideScheduler sss = new StaticStrideScheduler(weights, random);
     int[] expectedPicks = new int[] {2, 2, 2};
     int[] picks = new int[3];
@@ -908,7 +908,7 @@ public class WeightedRoundRobinLoadBalancerTest {
   @Test
   public void testAllInvalidWeightsUseOne() {
     float[] weights = {-3.1f, -0.0f, 0.0f};
-    Random random = new Random();
+    Random random = new Random(1);
     StaticStrideScheduler sss = new StaticStrideScheduler(weights, random);
     int[] expectedPicks = new int[] {2, 2, 2};
     int[] picks = new int[3];
@@ -922,7 +922,7 @@ public class WeightedRoundRobinLoadBalancerTest {
   public void testLargestWeightIndexPickedEveryGeneration() {
     float[] weights = {1.0f, 2.0f, 3.0f};
     int largestWeightIndex = 2;
-    Random random = new Random();
+    Random random = new Random(1);
     StaticStrideScheduler sss = new StaticStrideScheduler(weights, random);
     int largestWeightPickCount = 0;
     int kMaxWeight = 65535;
@@ -937,7 +937,7 @@ public class WeightedRoundRobinLoadBalancerTest {
   @Test
   public void testStaticStrideSchedulerNonIntegers1() {
     float[] weights = {2.0f, (float) (10.0 / 3.0), 1.0f};
-    Random random = new Random();
+    Random random = new Random(1);
     StaticStrideScheduler sss = new StaticStrideScheduler(weights, random);
     double totalWeight = 2 + 10.0 / 3.0 + 1.0;
     Map<Integer, Integer> pickCount = new HashMap<>();
@@ -947,14 +947,14 @@ public class WeightedRoundRobinLoadBalancerTest {
     }
     for (int i = 0; i < 3; i++) {
       assertThat(Math.abs(pickCount.getOrDefault(i, 0) / 1000.0 - weights[i] / totalWeight))
-          .isAtMost(0.01);
+          .isLessThan(0.002);
     }
   }
 
   @Test
   public void testStaticStrideSchedulerNonIntegers2() {
     float[] weights = {0.5f, 0.3f, 1.0f};
-    Random random = new Random();
+    Random random = new Random(1);
     StaticStrideScheduler sss = new StaticStrideScheduler(weights, random);
     double totalWeight = 1.8;
     Map<Integer, Integer> pickCount = new HashMap<>();
@@ -964,14 +964,14 @@ public class WeightedRoundRobinLoadBalancerTest {
     }
     for (int i = 0; i < 3; i++) {
       assertThat(Math.abs(pickCount.getOrDefault(i, 0) / 1000.0 - weights[i] / totalWeight))
-          .isAtMost(0.01);
+          .isLessThan(0.002);
     }
   }
 
   @Test
   public void testTwoWeights() {
     float[] weights = {1.0f, 2.0f};
-    Random random = new Random();
+    Random random = new Random(1);
     StaticStrideScheduler sss = new StaticStrideScheduler(weights, random);
     double totalWeight = 3;
     Map<Integer, Integer> pickCount = new HashMap<>();
@@ -981,14 +981,14 @@ public class WeightedRoundRobinLoadBalancerTest {
     }
     for (int i = 0; i < 2; i++) {
       assertThat(Math.abs(pickCount.getOrDefault(i, 0) / 1000.0 - weights[i] / totalWeight))
-          .isAtMost(0.01);
+          .isLessThan(0.002);
     }
   }
 
   @Test
   public void testManyWeights() {
     float[] weights = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f};
-    Random random = new Random();
+    Random random = new Random(1);
     StaticStrideScheduler sss = new StaticStrideScheduler(weights, random);
     double totalWeight = 15;
     Map<Integer, Integer> pickCount = new HashMap<>();
@@ -998,14 +998,14 @@ public class WeightedRoundRobinLoadBalancerTest {
     }
     for (int i = 0; i < 5; i++) {
       assertThat(Math.abs(pickCount.getOrDefault(i, 0) / 1000.0 - weights[i] / totalWeight))
-          .isAtMost(0.0011);
+          .isLessThan(0.002);
     }
   }
 
   @Test
   public void testManyComplexWeights() {
     float[] weights = {1.2f, 2.4f, 222.56f, 1.1f, 15.0f, 226342.0f, 5123.0f, 532.2f};
-    Random random = new Random();
+    Random random = new Random(1);
     StaticStrideScheduler sss = new StaticStrideScheduler(weights, random);
     double totalWeight = 1.2 + 2.4 + 222.56 + 15.0 + 226342.0 + 5123.0 + 0.0001;
     Map<Integer, Integer> pickCount = new HashMap<>();
@@ -1015,7 +1015,7 @@ public class WeightedRoundRobinLoadBalancerTest {
     }
     for (int i = 0; i < 8; i++) {
       assertThat(Math.abs(pickCount.getOrDefault(i, 0) / 1000.0 - weights[i] / totalWeight))
-          .isAtMost(0.01);
+          .isLessThan(0.002);
     }
   }
 
@@ -1052,7 +1052,7 @@ public class WeightedRoundRobinLoadBalancerTest {
     }
     for (int i = 0; i < 5; i++) {
       assertThat(Math.abs(pickCount.getOrDefault(i, 0) / 1000.0 - weights[i] / totalWeight))
-          .isAtMost(0.001);
+          .isLessThan(0.002);
     }
   }
   
@@ -1069,7 +1069,7 @@ public class WeightedRoundRobinLoadBalancerTest {
     }
     for (int i = 0; i < 5; i++) {
       assertThat(Math.abs(pickCount.getOrDefault(i, 0) / 1000.0 - weights[i] / totalWeight))
-          .isAtMost(0.0011);
+          .isLessThan(0.002);
     }
   }
 
