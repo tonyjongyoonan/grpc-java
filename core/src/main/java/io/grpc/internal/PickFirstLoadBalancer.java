@@ -54,8 +54,8 @@ final class PickFirstLoadBalancer extends LoadBalancer {
     List<EquivalentAddressGroup> servers = resolvedAddresses.getAddresses();
     if (servers.isEmpty()) {
       handleNameResolutionError(Status.UNAVAILABLE.withDescription(
-          "NameResolver returned no usable address. addrs=" + resolvedAddresses.getAddresses()
-              + ", attrs=" + resolvedAddresses.getAttributes()));
+              "NameResolver returned no usable address. addrs=" + resolvedAddresses.getAddresses()
+                      + ", attrs=" + resolvedAddresses.getAttributes()));
       return false;
     }
 
@@ -63,25 +63,25 @@ final class PickFirstLoadBalancer extends LoadBalancer {
     // the load.
     if (resolvedAddresses.getLoadBalancingPolicyConfig() instanceof PickFirstLoadBalancerConfig) {
       PickFirstLoadBalancerConfig config
-          = (PickFirstLoadBalancerConfig) resolvedAddresses.getLoadBalancingPolicyConfig();
+              = (PickFirstLoadBalancerConfig) resolvedAddresses.getLoadBalancingPolicyConfig();
       if (config.shuffleAddressList != null && config.shuffleAddressList) {
         servers = new ArrayList<EquivalentAddressGroup>(servers);
         Collections.shuffle(servers,
-            config.randomSeed != null ? new Random(config.randomSeed) : new Random());
+                config.randomSeed != null ? new Random(config.randomSeed) : new Random());
       }
     }
 
     if (subchannel == null) {
       final Subchannel subchannel = helper.createSubchannel(
-          CreateSubchannelArgs.newBuilder()
-              .setAddresses(servers)
-              .build());
+              CreateSubchannelArgs.newBuilder()
+                      .setAddresses(servers)
+                      .build());
       subchannel.start(new SubchannelStateListener() {
-          @Override
-          public void onSubchannelState(ConnectivityStateInfo stateInfo) {
-            processSubchannelState(subchannel, stateInfo);
-          }
-        });
+        @Override
+        public void onSubchannelState(ConnectivityStateInfo stateInfo) {
+          processSubchannelState(subchannel, stateInfo);
+        }
+      });
       this.subchannel = subchannel;
 
       // The channel state does not get updated when doing name resolving today, so for the moment
@@ -206,11 +206,11 @@ final class PickFirstLoadBalancer extends LoadBalancer {
     public PickResult pickSubchannel(PickSubchannelArgs args) {
       if (connectionRequested.compareAndSet(false, true)) {
         helper.getSynchronizationContext().execute(new Runnable() {
-            @Override
-            public void run() {
-              subchannel.requestConnection();
-            }
-          });
+          @Override
+          public void run() {
+            subchannel.requestConnection();
+          }
+        });
       }
       return PickResult.withNoResult();
     }
